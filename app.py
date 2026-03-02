@@ -3,7 +3,6 @@ import plotly.graph_objects as go
 import requests
 import os
 import math
-import base64
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -18,9 +17,14 @@ load_dotenv()
 st.set_page_config(layout="wide", page_title="URBAN GENERATIVE AGENT", initial_sidebar_state="expanded")
 
 st.markdown("""
-<style>    
-    /* Pure black background with minimalist sans-serif fonts */
-    .stApp { background-color: #000000; color: #E0E0E0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
+<style>
+    /* 彻底解决白色 Bar 的问题：将背景强制设为纯黑，完美隐身 */
+    [data-testid="stHeader"] { background-color: #000000 !important; }
+    /* 隐藏右上角没用的 Deploy 等菜单栏 */
+    [data-testid="stToolbar"] { display: none !important; }
+    
+    /* Pure black background with high-contrast text */
+    .stApp { background-color: #000000; color: #F0F0F0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
     .block-container { padding-top: 2rem !important; } 
     
     h1, h2, h3, h4, h5 { font-weight: 500 !important; color: #FFFFFF; letter-spacing: 0.05em; text-transform: uppercase; }
@@ -38,24 +42,25 @@ st.markdown("""
     [data-testid="stSidebar"] { background-color: #050505; border-right: 1px solid #1A1A1A; }
     .stTextInput>div>div>input, .stTextArea textarea, .stNumberInput input { 
         border-radius: 0px !important; background-color: #111111 !important; 
-        border: 1px solid #333333 !important; color: #FFFFFF !important; 
+        border: 1px solid #444444 !important; color: #FFFFFF !important; 
     }
     
-    hr { border-top: 1px solid #222222; margin: 1.5rem 0; }
+    hr { border-top: 1px solid #333333; margin: 1.5rem 0; }
     
-    /* Metric Cards: Cold, data-driven panels */
-    .metric-card { background: transparent; border: 1px solid #333333; padding: 15px; margin-bottom: 15px; border-left: 2px solid #555; }
-    .metric-title { font-size: 0.7rem; color: #888888; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+    /* Metric Cards: 提高边框和内部文字的亮度 */
+    .metric-card { background: transparent; border: 1px solid #444444; padding: 15px; margin-bottom: 15px; border-left: 2px solid #777777; }
+    .metric-title { font-size: 0.75rem; color: #BBBBBB; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; font-weight: bold; }
     .metric-value { font-size: 1.6rem; color: #FFFFFF; font-weight: 300; line-height: 1.2;}
     
-    /* Evaluation Badges */
-    .eval-badge { border: 1px solid #555; color: #CCC; padding: 3px 8px; font-size: 0.75rem; display: inline-block; margin-bottom: 8px; font-family: monospace;}
+    /* Evaluation Badges: 提亮边框和文字 */
+    .eval-badge { border: 1px solid #777; color: #DDDDDD; padding: 3px 8px; font-size: 0.75rem; display: inline-block; margin-bottom: 8px; font-family: monospace;}
     .eval-good { border-color: #FFF; color: #FFF; font-weight: bold; }
-    .eval-warn { border-color: #888; color: #888; }
-    .eval-bad { border: 1px solid #FF3333; background: #220000; color: #FF3333; } 
+    .eval-warn { border-color: #BBBBBB; color: #BBBBBB; }
+    .eval-bad { border: 1px solid #FF5555; background: #220000; color: #FF5555; font-weight: bold; } 
     
-    .placeholder-box { border: 1px dashed #333; text-align: center; padding: 40px 20px; color: #444; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;}
-    .rationale-text { font-size: 0.85rem; color: #AAAAAA; line-height: 1.6; border-left: 1px solid #444; padding-left: 15px; margin-top: 10px;}
+    /* 提亮占位符和描述文本 */
+    .placeholder-box { border: 1px dashed #555; text-align: center; padding: 40px 20px; color: #999999; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;}
+    .rationale-text { font-size: 0.9rem; color: #DDDDDD; line-height: 1.6; border-left: 2px solid #666; padding-left: 15px; margin-top: 10px;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -64,43 +69,7 @@ def get_api_key(key_name):
     except Exception: return os.getenv(key_name)
 
 # ==========================================
-# 1. Autodesk APS / Cloud Connector
-# ==========================================
-class FormaCloudConnector:
-    def __init__(self):
-        self.client_id = get_api_key("FORMA_CLIENT_ID")
-        self.client_secret = get_api_key("FORMA_CLIENT_SECRET")
-        self.auth_url = "https://developer.api.autodesk.com/authentication/v2/token"
-        self.token = None
-
-    def authenticate(self):
-        if not self.client_id or not self.client_secret:
-            return False, "MISSING_CREDENTIALS IN SECRETS OR .ENV"
-            
-        auth_string = f"{self.client_id}:{self.client_secret}"
-        b64_auth = base64.b64encode(auth_string.encode()).decode()
-        
-        headers = {
-            "Authorization": f"Basic {b64_auth}",
-            "Content-Type": "application/x-www-form-urlencoded"
-        }
-        data = {
-            "grant_type": "client_credentials",
-            "scope": "data:read data:write data:create"
-        }
-        
-        try:
-            response = requests.post(self.auth_url, headers=headers, data=data)
-            if response.status_code == 200:
-                self.token = response.json().get("access_token")
-                return True, "AUTH_SUCCESS: BEARER_TOKEN_ACQUIRED"
-            else:
-                return False, f"AUTH_FAILED: {response.text}"
-        except Exception as e:
-            return False, f"CONNECTION_ERROR: {str(e)}"
-
-# ==========================================
-# 2. Geocoding & OSM Extraction Engine
+# 1. Geocoding & OSM Extraction Engine
 # ==========================================
 def geocode_address(address):
     url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
@@ -130,7 +99,7 @@ def fetch_urban_context(clat, clon, r=150):
     except Exception as e: return {"error": str(e)}
 
 # ==========================================
-# 3. Agent 1: Lead Architect
+# 2. Agent 1: Lead Architect
 # ==========================================
 class BuildingBlock(BaseModel):
     width: float = Field(description="Width along X-axis (m)"); length: float = Field(description="Length along Y-axis (m)"); height: float = Field(description="Height (m)")
@@ -160,7 +129,7 @@ def generate_massing(api_key, context_str, intent):
     return (prompt | structured_llm).invoke({})
 
 # ==========================================
-# 4. Agent 2: Urban Impact Assessor
+# 3. Agent 2: Urban Impact Assessor
 # ==========================================
 def evaluate_urban_impact(blocks, context_buildings):
     total_volume = 0
@@ -211,7 +180,7 @@ def evaluate_urban_impact(blocks, context_buildings):
     return total_volume, max_h, len(impacted_neighbors), report
 
 # ==========================================
-# 5. Visualization
+# 4. Visualization
 # ==========================================
 def plot_urban_scene(context_buildings, blocks=None):
     fig = go.Figure()
@@ -222,18 +191,18 @@ def plot_urban_scene(context_buildings, blocks=None):
             x = [p[0] for p in pts]; y = [p[1] for p in pts]
             
             is_impacted = b.get('impacted', False)
-            cg = 'rgba(255, 50, 50, 0.8)' if is_impacted else 'rgba(40, 40, 40, 0.5)'
-            ce = '#FF3333' if is_impacted else '#444444'
+            cg = 'rgba(255, 60, 60, 0.85)' if is_impacted else 'rgba(50, 50, 50, 0.5)'
+            ce = '#FF4444' if is_impacted else '#555555'
             line_w = 2 if is_impacted else 1
             
             fig.add_trace(go.Scatter3d(x=x, y=y, z=[0]*len(pts), mode='lines', surfaceaxis=2, surfacecolor=cg, line=dict(color=ce, width=line_w), showlegend=False, hoverinfo='skip'))
             fig.add_trace(go.Scatter3d(x=x, y=y, z=[h]*len(pts), mode='lines', surfaceaxis=2, surfacecolor=cg, line=dict(color=ce, width=line_w), showlegend=False, hoverinfo='skip'))
             for i in range(len(pts) - 1): fig.add_trace(go.Scatter3d(x=[x[i], x[i]], y=[y[i], y[i]], z=[0, h], mode='lines', showlegend=False, line=dict(color=ce, width=line_w), hoverinfo='skip'))
     
-    fig.add_trace(go.Scatter3d(x=[0], y=[0], z=[0], mode='markers+text', marker=dict(color='#FFFFFF', size=3, symbol='cross'), text=["SITE"], textposition="top right", textfont=dict(color='#666666'), showlegend=False, hoverinfo='skip'))
+    fig.add_trace(go.Scatter3d(x=[0], y=[0], z=[0], mode='markers+text', marker=dict(color='#FFFFFF', size=3, symbol='cross'), text=["SITE"], textposition="top right", textfont=dict(color='#888888'), showlegend=False, hoverinfo='skip'))
 
     if blocks:
-        pg = 'rgba(255, 255, 255, 0.9)'
+        pg = 'rgba(255, 255, 255, 0.95)'
         pe = '#FFFFFF' 
         for b in blocks:
             hw = b.width/2; hl = b.length/2; ox = b.offset_x; oy = b.offset_y; zmin = b.elevation; zmax = b.elevation + b.height
@@ -246,7 +215,7 @@ def plot_urban_scene(context_buildings, blocks=None):
     return fig
 
 # ==========================================
-# 6. UI & Business Logic Integration
+# 5. UI & Business Logic Integration
 # ==========================================
 if 'location_name' not in st.session_state: st.session_state.location_name = "N/A"
 if 'context_data' not in st.session_state: st.session_state.context_data = None
@@ -294,19 +263,6 @@ if st.sidebar.button("EXECUTE GENERATION"):
             except Exception as e:
                 st.sidebar.error(f"FAILED: {str(e)}")
 
-# 【这是加回来的绝杀按钮】
-st.sidebar.markdown("<hr>", unsafe_allow_html=True)
-st.sidebar.markdown("### 03. AUTODESK API SYNC")
-if st.sidebar.button("INITIALIZE APS CONNECTION"):
-    with st.spinner("Handshaking with Autodesk Platform Services..."):
-        forma_api = FormaCloudConnector()
-        success, msg = forma_api.authenticate()
-        if success:
-            st.sidebar.success(f"SUCCESS: BEARER TOKEN ACQUIRED")
-            st.session_state.forma_connected = True
-        else:
-            st.sidebar.error(f"FAILED: {msg}")
-
 # --- Main View & Post-Evaluation Panel ---
 c1, c2 = st.columns([2.5, 1.2])
 
@@ -318,58 +274,45 @@ with c1:
 with c2:
     st.markdown("### DATA ANALYTICS")
     
-    # 云端连接成功后的冷峻提示
-    if st.session_state.forma_connected:
-         st.markdown("""
-         <div class="metric-card" style="border-left-color: #00AAFF; background: rgba(0, 170, 255, 0.05);">
-             <div class="metric-title" style="color:#00AAFF; font-weight: bold;">[SYS_MSG: APS CLOUD LINK ACTIVE]</div>
-             <div style="font-size: 0.8rem; color: #CCC; line-height: 1.4;">
-             Successfully authenticated with Autodesk Server.<br>System holds active Bearer Token for data provisioning.
-             </div>
-         </div>
-         """, unsafe_allow_html=True)
-
     bldgs_count = len(st.session_state.context_data['buildings']) if st.session_state.context_data and "error" not in st.session_state.context_data else 0
     st.markdown(f"""
     <div class="metric-card">
         <div class="metric-title">TARGET LOCATION</div>
-        <div style="font-size: 0.8rem; color: #AAA; margin-bottom: 10px;">{st.session_state.location_name}</div>
+        <div style="font-size: 0.9rem; color: #DDDDDD; margin-bottom: 10px;">{st.session_state.location_name}</div>
         <div class="metric-title">CONTEXT ENTITIES</div>
         <div class="metric-value">{bldgs_count}</div>
     </div>
     """, unsafe_allow_html=True)
     
     if not st.session_state.proposal:
-        st.markdown("<div class='placeholder-box'>[ AWAITING TOPOLOGY GENERATION ]<br><br><span style='font-size:0.75rem; color:#666;'>Generate model to run environmental diagnostics.</span></div>", unsafe_allow_html=True)
+        st.markdown("<div class='placeholder-box'>[ AWAITING TOPOLOGY GENERATION ]<br><br><span style='font-size:0.75rem; color:#888;'>Generate model to run environmental diagnostics.</span></div>", unsafe_allow_html=True)
     else:
         p = st.session_state.proposal
         vol, max_h, impacted_cnt, report = evaluate_urban_impact(p.blocks, st.session_state.context_data['buildings'])
         
         st.markdown(f"""
-        <div class="metric-card" style="border-left-color: #FFF;">
-            <div class="metric-title" style="color:#FFF;">ARCHITECT'S RATIONALE</div>
+        <div class="metric-card" style="border-left-color: #FFFFFF;">
+            <div class="metric-title" style="color:#FFFFFF;">ARCHITECT'S RATIONALE</div>
             <div class="rationale-text">{p.rationale}</div>
         </div>
         """, unsafe_allow_html=True)
         
         st.markdown(f"""
-        <div class="metric-card" style="border-color: {'#FFF' if 'OPTIMAL' in report['massing']['score'] or 'HUMAN' in report['massing']['score'] else '#FF3333'};">
+        <div class="metric-card" style="border-color: {'#FFFFFF' if 'OPTIMAL' in report['massing']['score'] or 'HUMAN' in report['massing']['score'] else '#FF5555'};">
             <div class="metric-title">MORPHOLOGY (EFFICIENCY)</div>
             <div class="eval-badge {'eval-good' if 'HUMAN' in report['massing']['score'] else 'eval-bad'}">{report['massing']['score']}</div>
-            <div style="font-size: 0.8rem; color: #888;">{report['massing']['desc']}</div>
+            <div style="font-size: 0.85rem; color: #BBBBBB;">{report['massing']['desc']}</div>
         </div>
         """, unsafe_allow_html=True)
         
         impact_class = 'eval-bad' if 'SEVERE' in report['impact']['score'] else 'eval-warn' if 'MODERATE' in report['impact']['score'] else 'eval-good'
-        border_color = '#FF3333' if 'SEVERE' in report['impact']['score'] else '#FFF'
+        border_color = '#FF5555' if 'SEVERE' in report['impact']['score'] else '#FFFFFF'
         
         st.markdown(f"""
         <div class="metric-card" style="border-color: {border_color};">
             <div class="metric-title">CONTEXTUAL IMPACT (RIGHT TO LIGHT)</div>
             <div class="eval-badge {impact_class}">{report['impact']['score']}</div>
-            <div class="metric-value" style="font-size: 1.2rem; margin-bottom: 5px; color: {border_color};">{impacted_cnt} <span style="font-size:0.7rem; color:#888;">NEIGHBORS IMPACTED</span></div>
-            <div style="font-size: 0.8rem; color: #888;">{report['impact']['desc']}</div>
+            <div class="metric-value" style="font-size: 1.2rem; margin-bottom: 5px; color: {border_color};">{impacted_cnt} <span style="font-size:0.75rem; color:#BBBBBB;">NEIGHBORS IMPACTED</span></div>
+            <div style="font-size: 0.85rem; color: #BBBBBB;">{report['impact']['desc']}</div>
         </div>
-
         """, unsafe_allow_html=True)
-
