@@ -19,9 +19,8 @@ st.set_page_config(layout="wide", page_title="URBAN GENERATIVE AGENT", initial_s
 
 st.markdown("""
 <style>
-    /* Completely hide Streamlit's top bar and hamburger menu */
-    [data-testid="stHeader"] { display: none !important; }
-    [data-testid="stToolbar"] { display: none !important; }
+    [data-testid="stHeader"] { background-color: transparent !important; }
+    [data-testid="stToolbar"] { visibility: hidden !important; }
     
     /* Pure black background with minimalist sans-serif fonts */
     .stApp { background-color: #000000; color: #E0E0E0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
@@ -374,4 +373,5 @@ with c2:
             <div class="metric-value" style="font-size: 1.2rem; margin-bottom: 5px; color: {border_color};">{impacted_cnt} <span style="font-size:0.7rem; color:#888;">NEIGHBORS IMPACTED</span></div>
             <div style="font-size: 0.8rem; color: #888;">{report['impact']['desc']}</div>
         </div>
+
         """, unsafe_allow_html=True)
