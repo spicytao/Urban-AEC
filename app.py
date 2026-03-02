@@ -18,9 +18,9 @@ st.set_page_config(layout="wide", page_title="URBAN GENERATIVE AGENT", initial_s
 
 st.markdown("""
 <style>
-    /* 彻底解决白色 Bar 的问题：将背景强制设为纯黑，完美隐身 */
+
     [data-testid="stHeader"] { background-color: #000000 !important; }
-    /* 隐藏右上角没用的 Deploy 等菜单栏 */
+
     [data-testid="stToolbar"] { display: none !important; }
     
     /* Pure black background with high-contrast text */
@@ -316,3 +316,4 @@ with c2:
             <div style="font-size: 0.85rem; color: #BBBBBB;">{report['impact']['desc']}</div>
         </div>
         """, unsafe_allow_html=True)
+
