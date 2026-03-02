@@ -18,10 +18,7 @@ load_dotenv()
 st.set_page_config(layout="wide", page_title="URBAN GENERATIVE AGENT", initial_sidebar_state="expanded")
 
 st.markdown("""
-<style>
-    [data-testid="stHeader"] { background-color: transparent !important; }
-    [data-testid="stToolbar"] { visibility: hidden !important; }
-    
+<style>    
     /* Pure black background with minimalist sans-serif fonts */
     .stApp { background-color: #000000; color: #E0E0E0; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; }
     .block-container { padding-top: 2rem !important; } 
@@ -375,3 +372,4 @@ with c2:
         </div>
 
         """, unsafe_allow_html=True)
+
